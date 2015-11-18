@@ -28,15 +28,14 @@ int main(int argc, char *argv[])
     unsigned short servPort;     /* Server port */
     unsigned int clntLen;            /* Length of client address data structure */
 
-    if (argc != 3)     /* Test for correct number of arguments */
+    if (argc != 2)     /* Test for correct number of arguments */
     {
         fprintf(stderr, "Please enter correct number of arguments\n");
         exit(1);
     }
 
-    servPort = atoi(argv[2]);  /* Second arg:  local port */
+    servPort = atoi(argv[1]);  /* Second arg:  local port */
 
-        char *filename = argv[1]; /* first arg: database */
    /* Create socket for incoming connections */
     if ((servSock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0)
         die("socket() failed");
@@ -53,7 +52,7 @@ int main(int argc, char *argv[])
     /* Mark the socket so it will listen for incoming connections */
     if (listen(servSock, MAXPENDING) < 0)
         die("listen() failed");
-
+        
     for (;;) /* Run forever */
     {
         /* Set the size of the in-out parameter */
@@ -65,38 +64,65 @@ int main(int argc, char *argv[])
             die("accept() failed");
 
         /* clntSock is connected to a client! */
-        FILE *input = fdopen(clntSock, "r"); // gives FILE* to use in place of stdin
-        
-    /*
-     * lookup loop
-     */
 
-    char line[1000];
-    while (fgets(line, sizeof(line), input) != NULL) {
-		char str[1030];
-		sprintf(str, "%20s said: %1000s\n", "namefiller", line); 
-		if(send(clntSock, str, strlen(str), 0) != strlen(str)){
-			die("send failed");
-		} 
-		if(send(clntSock, "\n", strlen("\n"), 0) != strlen("\n")){
-			die("send failed");
-		}
-    }
+        printf("Handling client %s\n", inet_ntoa(clntAddr.sin_addr));
+        pid_t pid = fork();
+        if (pid ==0){
+                FILE *input = fdopen(clntSock, "r"); // gives FILE* to use in place of stdin
+
+                char line[500];
+                while (fgets(line, sizeof(line), input) != NULL) {
+                        char str[1030];
+                        sprintf(str, "%s said: %s\n", "namefiller", line);
+                        if(send(clntSock, str, strlen(str), 0) != strlen(str)){
+                                die("send failed");
+                        }
+                }
 
         // see if fgets() produced error
-    if (ferror(input))
-        die("input");
+        if (ferror(input))
+                die("input");
 
-    /*
-     * clean up and quit
-     */
-		fclose(input); // close underlying socket
-    	printf("Handling client %s\n", inet_ntoa(clntAddr.sin_addr));
+        /*
+        * clean up and quit
+        */
+        fclose(input); // close underlying socket
+        printf("Client %s logged out\n", inet_ntoa(clntAddr.sin_addr));
 
-    }
-    
+    	}else{
+                close(clntSock);
+                 /* Wait for a client to connect */
+                if ((clntSock = accept(servSock, (struct sockaddr *) &clntAddr,
+                               &clntLen)) < 0)
+                        die("accept() failed");
+
+
+        	/* clntSock is connected to a client! */
+
+        	printf("Handling client %s\n", inet_ntoa(clntAddr.sin_addr));
+                FILE *input = fdopen(clntSock, "r"); // gives FILE* to use in place of stdin
+
+                char line[500];
+                while (fgets(line, sizeof(line), input) != NULL) {
+                        char str[1030];
+                        sprintf(str, "%s said: %s\n", "namefiller", line);
+                        if(send(clntSock, str, strlen(str), 0) != strlen(str)){
+                                die("send failed");
+                        }
+                }
+
+        	// see if fgets() produced error
+    		if (ferror(input))
+                die("input");
+
+       	 	/*
+        	* clean up and quit
+        	*/
+        	fclose(input); // close underlying socket
+        	printf("Client %s logged out\n", inet_ntoa(clntAddr.sin_addr));
+		}
+	}
+
     /* NOT REACHED */
 }
-
-
 
